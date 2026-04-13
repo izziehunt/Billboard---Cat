@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cat 0.5x angle</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --fg: #e8e6e3;
+        --muted: rgba(232, 230, 227, 0.5);
+        --dwell: 60s;
+        --fade: 5s;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #070707;
+        color: var(--fg);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        overflow: hidden;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        background: #000;
+      }
+      .layer {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        opacity: 0;
+        transition: opacity var(--fade) cubic-bezier(0.45, 0, 0.55, 1);
+        pointer-events: none;
+      }
+      .layer.on {
+        opacity: 1;
+        z-index: 1;
+      }
+      .layer img {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        transform: scale(1);
+        will-change: transform;
+      }
+      .layer.on img {
+        animation: drift var(--dwell) ease-out forwards;
+      }
+      @keyframes drift {
+        from {
+          transform: scale(1) translate3d(0, 0, 0);
+        }
+        to {
+          transform: scale(1.06) translate3d(0.35%, -0.25%, 0);
+        }
+      }
+      .ui {
+        position: fixed;
+        z-index: 2;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        pointer-events: none;
+      }
+      .ui a {
+        pointer-events: auto;
+        color: var(--muted);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+      }
+      .ui a:hover {
+        color: var(--fg);
+        border-bottom-color: var(--fg);
+      }
+      .ui-top-right {
+        top: 1rem;
+        right: 1rem;
+        text-align: right;
+        color: var(--muted);
+      }
+      .ui-bottom-left {
+        bottom: 1rem;
+        left: 1rem;
+      }
+      #title {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        right: 6rem;
+        z-index: 2;
+        font-size: 11px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        letter-spacing: 0.02em;
+        text-transform: none;
+      }
+      #loading,
+      #empty,
+      #error {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        text-align: center;
+        font-size: 13px;
+        color: var(--muted);
+        z-index: 3;
+        background: #070707;
+      }
+      #error {
+        color: #f0b4b4;
+      }
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading">Loading images…</div>
+    <div id="error" class="hidden"></div>
+    <div id="empty" class="hidden">
+      No images found in this channel.
+    </div>
+
+    <div id="title" class="hidden"></div>
+    <div class="ui ui-top-right hidden" id="counter"></div>
+    <div class="ui ui-bottom-left hidden" id="arena-wrap"></div>
+
+    <div id="stage" class="hidden">
+      <div class="layer on" id="layer-a" aria-hidden="true">
+        <img alt="" decoding="async" />
+      </div>
+      <div class="layer" id="layer-b" aria-hidden="true">
+        <img alt="" decoding="async" />
+      </div>
+    </div>
+
+    <script>
+      const CHANNEL_SLUG = "cat-0-5x-angle";
+      const CHANNEL_URL =
+        "https://www.are.na/isabella-hunt-htrcx2ctybi/cat-0-5x-angle";
+      const DWELL_MS = 60_000;
+
+      const $ = (id) => document.getElementById(id);
+
+      function shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+
+      function imageUrlFromBlock(block) {
+        if (block.class === "Image" && block.image) {
+          return (
+            block.image.original?.url ||
+            block.image.large?.url ||
+            block.image.display?.url ||
+            null
+          );
+        }
+        if (block.class === "Attachment" && block.attachment) {
+          const ct = (block.attachment.content_type || "").toLowerCase();
+          const name = (block.attachment.file_name || "").toLowerCase();
+          const isImage =
+            ct.startsWith("image/") ||
+            /\.(jpe?g|png|gif|webp|avif)$/i.test(name);
+          if (!isImage) return null;
+          return (
+            block.image?.original?.url ||
+            block.image?.large?.url ||
+            block.attachment.url ||
+            null
+          );
+        }
+        return null;
+      }
+
+      function blockToItem(block) {
+        const src = imageUrlFromBlock(block);
+        if (!src) return null;
+        const title =
+          block.title ||
+          block.generated_title ||
+          block.image?.filename ||
+          "Image";
+        return { src, title };
+      }
+
+      async function fetchAllBlocks(slug) {
+        const per = 100;
+        const blocks = [];
+        for (let page = 1; ; page++) {
+          const url = `https://api.are.na/v2/channels/${encodeURIComponent(
+            slug
+          )}/contents?page=${page}&per=${per}`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Are.na returned ${res.status}`);
+          const data = await res.json();
+          const batch = data.contents || [];
+          blocks.push(...batch);
+          if (batch.length < per) break;
+        }
+        return blocks;
+      }
+
+      function prefetch(url) {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = url;
+      }
+
+      const state = {
+        slides: [],
+        index: 0,
+        useA: true,
+        timer: null,
+      };
+
+      function clearTimer() {
+        if (state.timer) {
+          clearTimeout(state.timer);
+          state.timer = null;
+        }
+      }
+
+      function layers() {
+        const a = $("layer-a");
+        const b = $("layer-b");
+        return state.useA ? { on: a, off: b } : { on: b, off: a };
+      }
+
+      function setUi(item, i, total) {
+        $("title").textContent = item.title;
+        $("counter").textContent = `${i + 1} · ${total}`;
+      }
+
+      function showArenaLink() {
+        $("arena-wrap").innerHTML = `<a href="${CHANNEL_URL}" rel="noopener noreferrer" target="_blank">Open on Are.na</a>`;
+      }
+
+      function restartDrift(layerEl) {
+        const img = layerEl.querySelector("img");
+        layerEl.classList.remove("on");
+        void layerEl.offsetWidth;
+        layerEl.classList.add("on");
+        void img?.offsetWidth;
+      }
+
+      function advance() {
+        const { slides } = state;
+        if (!slides.length) return;
+
+        clearTimer();
+
+        if (slides.length === 1) {
+          restartDrift($("layer-a"));
+          state.timer = setTimeout(advance, DWELL_MS);
+          return;
+        }
+
+        const nextIndex = (state.index + 1) % slides.length;
+        const next = slides[nextIndex];
+        const { on, off } = layers();
+        const offImg = off.querySelector("img");
+
+        prefetch(slides[(nextIndex + 1) % slides.length].src);
+
+        const startFade = () => {
+          offImg.onload = null;
+          offImg.onerror = null;
+
+          on.classList.remove("on");
+          off.classList.add("on");
+          state.useA = off.id === "layer-a";
+          state.index = nextIndex;
+          setUi(next, state.index, slides.length);
+
+          state.timer = setTimeout(advance, DWELL_MS);
+        };
+
+        offImg.onload = () => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(startFade);
+          });
+        };
+        offImg.onerror = () => {
+          console.warn("Image failed, skipping", next);
+          state.index = nextIndex;
+          advance();
+        };
+
+        off.classList.remove("on");
+        offImg.alt = next.title;
+        offImg.src = next.src;
+        if (offImg.complete && offImg.naturalWidth > 0) {
+          offImg.onload();
+        }
+      }
+
+      function boot(slides) {
+        state.slides = slides;
+        state.index = 0;
+        state.useA = true;
+
+        $("loading").classList.add("hidden");
+        $("stage").classList.remove("hidden");
+        $("title").classList.remove("hidden");
+        $("counter").classList.remove("hidden");
+        $("arena-wrap").classList.remove("hidden");
+        showArenaLink();
+
+        const first = slides[0];
+        const a = $("layer-a");
+        const b = $("layer-b");
+        const aImg = a.querySelector("img");
+        const bImg = b.querySelector("img");
+
+        a.classList.add("on");
+        b.classList.remove("on");
+        aImg.alt = first.title;
+        aImg.src = first.src;
+        bImg.removeAttribute("src");
+        bImg.alt = "";
+
+        setUi(first, 0, slides.length);
+        if (slides.length > 1) prefetch(slides[1].src);
+
+        const kick = () => {
+          state.timer = setTimeout(advance, DWELL_MS);
+        };
+
+        if (aImg.complete && aImg.naturalWidth > 0) kick();
+        else aImg.addEventListener("load", kick, { once: true });
+        aImg.addEventListener(
+          "error",
+          () => {
+            $("error").classList.remove("hidden");
+            $("error").textContent = "Could not load the first image.";
+            $("stage").classList.add("hidden");
+          },
+          { once: true }
+        );
+      }
+
+      async function main() {
+        try {
+          const blocks = await fetchAllBlocks(CHANNEL_SLUG);
+          const slides = shuffle(blocks.map(blockToItem).filter(Boolean));
+          if (!slides.length) {
+            $("loading").classList.add("hidden");
+            $("empty").classList.remove("hidden");
+            return;
+          }
+          boot(slides);
+        } catch (e) {
+          $("loading").classList.add("hidden");
+          $("error").classList.remove("hidden");
+          $("error").textContent =
+            e instanceof Error
+              ? e.message
+              : "Could not load the Are.na channel.";
+        }
+      }
+
+      main();
+    </script>
+  </body>
+</html>
