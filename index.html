@@ -9,8 +9,8 @@
         color-scheme: dark;
         --fg: #e8e6e3;
         --muted: rgba(232, 230, 227, 0.5);
-        --dwell: 60s;
-        --fade: 5s;
+        --dwell: 3s;
+        --fade: 0.45s;
       }
       * {
         box-sizing: border-box;
@@ -60,7 +60,7 @@
           transform: scale(1) translate3d(0, 0, 0);
         }
         to {
-          transform: scale(1.06) translate3d(0.35%, -0.25%, 0);
+          transform: scale(1.02) translate3d(0.2%, -0.15%, 0);
         }
       }
       .ui {
@@ -151,7 +151,7 @@
       const CHANNEL_SLUG = "cat-0-5x-angle";
       const CHANNEL_URL =
         "https://www.are.na/isabella-hunt-htrcx2ctybi/cat-0-5x-angle";
-      const DWELL_MS = 60_000;
+      const DWELL_MS = 3000;
 
       const $ = (id) => document.getElementById(id);
 
