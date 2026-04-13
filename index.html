@@ -91,6 +91,39 @@
         bottom: 1rem;
         left: 1rem;
       }
+      #corner-blurb {
+        position: fixed;
+        bottom: 1rem;
+        right: 1rem;
+        z-index: 2;
+        text-align: right;
+        max-width: min(17.5rem, 88vw);
+        pointer-events: none;
+      }
+      #corner-blurb strong {
+        display: block;
+        margin: 0 0 0.4rem;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-weight: 800;
+        font-size: clamp(1.05rem, 3vw, 1.55rem);
+        letter-spacing: -0.03em;
+        line-height: 1.05;
+        color: var(--fg);
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9),
+          0 0 1.25rem rgba(0, 0, 0, 0.65);
+      }
+      #corner-blurb span {
+        display: block;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-weight: 500;
+        font-size: clamp(0.68rem, 2vw, 0.82rem);
+        line-height: 1.4;
+        color: rgba(232, 230, 227, 0.88);
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9),
+          0 0 1rem rgba(0, 0, 0, 0.55);
+      }
       #title {
         position: fixed;
         top: 1rem;
@@ -137,6 +170,11 @@
     <div id="title" class="hidden"></div>
     <div class="ui ui-top-right hidden" id="counter"></div>
     <div class="ui ui-bottom-left hidden" id="arena-wrap"></div>
+
+    <div id="corner-blurb" aria-hidden="true">
+      <strong>This Is A Cat</strong>
+      <span>Have a 0.5 of your cat? Show them off!</span>
+    </div>
 
     <div id="stage" class="hidden">
       <div class="layer on" id="layer-a" aria-hidden="true">
